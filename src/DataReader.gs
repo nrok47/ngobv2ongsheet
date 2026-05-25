@@ -51,9 +51,13 @@ function getActivityLog() {
     // ข้าม row ที่ไม่มีวันที่จริง
     if (!dateVal || !(dateVal instanceof Date) || isNaN(dateVal.getTime())) continue;
 
-    var amount = parseFloat(row[COL_AMOUNT - 1]) || 0;
     var status = String(row[COL_STATUS - 1]).trim();
     var budgetCode = String(row[COL_BUDGET_CODE - 1]).trim();
+
+    // COL_PO (H) = ยอดเบิกจ่าย/กันเงินจริง — ใช้สำหรับคำนวณการเงิน
+    // COL_AMOUNT (F) = งบประมาณที่ตั้งไว้ (แผน) — เก็บไว้อ้างอิง
+    var amount    = parseFloat(row[COL_PO - 1])     || 0;  // ยอดจริง (col H)
+    var budgeted  = parseFloat(row[COL_AMOUNT - 1]) || 0;  // ยอดแผน (col F)
 
     var datePaid = row[COL_DATE_PAID - 1];
     if (!(datePaid instanceof Date) || isNaN(datePaid.getTime())) datePaid = null;
@@ -64,7 +68,8 @@ function getActivityLog() {
       responsible: String(row[COL_RESPONSIBLE - 1]).trim(),
       group: String(row[COL_GROUP - 1]).trim(),
       project: String(row[COL_PROJECT - 1]).trim(),
-      amount: amount,
+      amount: amount,      // ยอดจริง (col H) — ใช้คำนวณ KPI ทั้งหมด
+      budgeted: budgeted,  // ยอดแผน (col F)
       budgetCode: budgetCode,
       status: status,
       adminLine: String(row[COL_ADMIN_LINE - 1]).trim()
