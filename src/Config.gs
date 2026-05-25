@@ -39,3 +39,15 @@ var ACTIVITY_START_ROW = 2;
 
 // ชื่อหัวคอลัมน์ที่ใช้ตรวจหา sheet activity log อัตโนมัติ
 var ACTIVITY_HEADER_MARKER = 'วันที่กันเงิน';
+
+// ============================================================
+// การจัดหมวดประเภทงบ (col L) → 4 หมวดหลัก
+// ชื่อหมวดหลักที่แสดงใน Dashboard
+var CAT_KHUEB   = 'คชจ.ขับเคลื่อน';   // 1.x และ 2.x
+var CAT_PHEUN   = 'คชจ.พื้นฐาน';      // 3.x
+var CAT_TAM     = 'คชจ.ตามสิทธิ์';    // งบบุคลากร + งบลงทุน
+var CAT_NORK    = 'เงินนอกงบประมาณ';  // เงินนอก...
+var CAT_OTHER   = 'อื่นๆ';
+
+// ลำดับที่แสดงใน Dashboard
+var CAT_ORDER = [CAT_KHUEB, CAT_PHEUN, CAT_TAM, CAT_NORK, CAT_OTHER];

@@ -192,52 +192,86 @@ function writeRoundsSummaryBlock_(sheet) {
   sheet.getRange(startRow, 4, 1, 3).setNumberFormat('#,##0.00');
 }
 
-// ─── Budget Code Breakdown ────────────────────────────────
+// ─── Budget Category Breakdown (4 หมวดหลัก + sub-detail) ──
+var CAT_COLORS = {
+  'คชจ.ขับเคลื่อน':  '#E8F5E9',  // เขียวอ่อน
+  'คชจ.พื้นฐาน':     '#E3F2FD',  // ฟ้าอ่อน
+  'คชจ.ตามสิทธิ์':   '#FFF9C4',  // เหลืองอ่อน
+  'เงินนอกงบประมาณ': '#FCE4EC',  // ชมพูอ่อน
+  'อื่นๆ':            '#F5F5F5'
+};
+var CAT_HEADER_COLORS = {
+  'คชจ.ขับเคลื่อน':  '#388E3C',
+  'คชจ.พื้นฐาน':     '#1565C0',
+  'คชจ.ตามสิทธิ์':   '#F57F17',
+  'เงินนอกงบประมาณ': '#C62828',
+  'อื่นๆ':            '#546E7A'
+};
+
 function writeBudgetCodeBlock_(sheet) {
   var startRow = 30;
-  sheet.getRange(startRow, 1, 1, 10).merge()
-    .setValue('เบิกจ่ายตามรหัสงบประมาณ')
+
+  // ─── Header section ───
+  sheet.getRange(startRow, 1, 1, 5).merge()
+    .setValue('สรุปเบิกจ่ายตามประเภทงบประมาณ')
     .setBackground(DASH_SECTION_BG).setFontColor('#FFFFFF')
     .setFontWeight('bold').setHorizontalAlignment('center');
   startRow++;
 
-  sheet.getRange(startRow, 1, 1, 3).setValues([['รหัสงบประมาณ', 'เบิกจ่าย (บาท)', '% ของงบรวม']])
+  // ─── แถว header คอลัมน์ ───
+  sheet.getRange(startRow, 1, 1, 4)
+    .setValues([['ประเภทงบประมาณ', 'เบิกจ่าย (บาท)', '% ของงบรวม', 'กันเงินรอเบิก (บาท)']])
     .setBackground('#546E7A').setFontColor('#FFFFFF').setFontWeight('bold');
   startRow++;
 
-  var byCode = getSpentByBudgetCode();
-  var codes = Object.keys(byCode);
+  var byCat  = getSpentByCategory();
+  var totalSpent = getTotalSpent();
 
-  // เรียงจากมากไปน้อย
-  codes.sort(function(a, b) { return byCode[b] - byCode[a]; });
+  // ─── แถวรวมทุกหมวด ───
+  var overallPct = TOTAL_BUDGET > 0 ? totalSpent / TOTAL_BUDGET : 0;
+  var totalReserved = getReservedAmount();
+  sheet.getRange(startRow, 1, 1, 4)
+    .setValues([['รวมทั้งหมด', totalSpent, overallPct, totalReserved]])
+    .setBackground('#BDD7EE').setFontWeight('bold');
+  sheet.getRange(startRow, 2).setNumberFormat('#,##0.00');
+  sheet.getRange(startRow, 3).setNumberFormat('0.00%');
+  sheet.getRange(startRow, 4).setNumberFormat('#,##0.00');
+  startRow++;
 
-  if (codes.length === 0) {
-    sheet.getRange(startRow, 1).setValue('ยังไม่มีข้อมูล');
-    return;
-  }
+  // ─── แต่ละหมวดหลัก + sub-detail ───
+  CAT_ORDER.forEach(function(cat) {
+    var catSpent = byCat[cat] || 0;
+    if (catSpent === 0) return; // ข้ามหมวดที่ไม่มีข้อมูล
 
-  var codeRows = codes.map(function(code, i) {
-    var spent = byCode[code];
-    var pct = TOTAL_BUDGET > 0 ? spent / TOTAL_BUDGET : 0;
-    return [code, spent, pct];
+    var catPct = TOTAL_BUDGET > 0 ? catSpent / TOTAL_BUDGET : 0;
+    var headerColor = CAT_HEADER_COLORS[cat] || '#546E7A';
+    var rowColor    = CAT_COLORS[cat] || '#F5F5F5';
+
+    // แถว header หมวด
+    sheet.getRange(startRow, 1, 1, 4)
+      .setValues([[cat, catSpent, catPct, '']])
+      .setBackground(headerColor).setFontColor('#FFFFFF').setFontWeight('bold');
+    sheet.getRange(startRow, 2).setNumberFormat('#,##0.00');
+    sheet.getRange(startRow, 3).setNumberFormat('0.00%');
+    startRow++;
+
+    // แถว sub-detail
+    var subItems = getSpentByTypeInCategory(cat);
+    subItems.forEach(function(item, idx) {
+      var subPct = TOTAL_BUDGET > 0 ? item.amount / TOTAL_BUDGET : 0;
+      var bg = idx % 2 === 0 ? rowColor : '#FFFFFF';
+      sheet.getRange(startRow, 1, 1, 4)
+        .setValues([['  ' + item.type, item.amount, subPct, '']])
+        .setBackground(bg);
+      sheet.getRange(startRow, 2).setNumberFormat('#,##0.00');
+      sheet.getRange(startRow, 3).setNumberFormat('0.00%');
+      startRow++;
+    });
   });
 
-  var dataRange = sheet.getRange(startRow, 1, codeRows.length, 3);
-  dataRange.setValues(codeRows);
-  dataRange.getColumn(); // flush
-
-  // Format
-  sheet.getRange(startRow, 2, codeRows.length, 1).setNumberFormat('#,##0.00');
-  sheet.getRange(startRow, 3, codeRows.length, 1).setNumberFormat('0.00%');
-
-  // สีสลับ
-  for (var i = 0; i < codeRows.length; i++) {
-    var bg = i % 2 === 0 ? '#FFFFFF' : DASH_ALT_BG;
-    sheet.getRange(startRow + i, 1, 1, 3).setBackground(bg);
-  }
-
-  // ปรับความกว้าง columns
-  sheet.setColumnWidth(1, 180);
-  sheet.setColumnWidth(2, 150);
+  // ─── ปรับความกว้าง columns ───
+  sheet.setColumnWidth(1, 220);
+  sheet.setColumnWidth(2, 140);
   sheet.setColumnWidth(3, 110);
+  sheet.setColumnWidth(4, 160);
 }

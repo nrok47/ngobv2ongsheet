@@ -62,15 +62,19 @@ function getActivityLog() {
     var datePaid = row[COL_DATE_PAID - 1];
     if (!(datePaid instanceof Date) || isNaN(datePaid.getTime())) datePaid = null;
 
+    var budgetType = String(row[COL_BUDGET_TYPE - 1]).trim(); // col L
+
     rows.push({
       dateReserve: dateVal,
       datePaid: datePaid,
       responsible: String(row[COL_RESPONSIBLE - 1]).trim(),
       group: String(row[COL_GROUP - 1]).trim(),
       project: String(row[COL_PROJECT - 1]).trim(),
-      amount: amount,      // ยอดจริง (col H) — ใช้คำนวณ KPI ทั้งหมด
-      budgeted: budgeted,  // ยอดแผน (col F)
+      amount: amount,       // ยอดจริง (col H) — ใช้คำนวณ KPI ทั้งหมด
+      budgeted: budgeted,   // ยอดแผน (col F)
       budgetCode: budgetCode,
+      budgetType: budgetType, // col L (ประเภทงบ เช่น "1.1 กลุ่มอนามัยแม่และเด็ก")
+      category: classifyBudgetType_(budgetType), // หมวดหลัก
       status: status,
       adminLine: String(row[COL_ADMIN_LINE - 1]).trim()
     });
@@ -106,7 +110,48 @@ function getSpentByMonth() {
   return map;
 }
 
-// เบิกจ่ายแยกตามรหัสงบประมาณ → { 'P1200...': 80000, ... }
+// จัดหมวดค่า col L → หมวดหลัก 4 หมวด
+function classifyBudgetType_(val) {
+  if (!val) return CAT_OTHER;
+  // 1.x และ 2.x = ขับเคลื่อน
+  if (/^[12]\./.test(val)) return CAT_KHUEB;
+  // 3.x = พื้นฐาน
+  if (/^3\./.test(val)) return CAT_PHEUN;
+  // งบบุคลากร หรือ งบลงทุน = ตามสิทธิ์
+  if (val.indexOf('งบบุคลากร') !== -1 || val.indexOf('งบลงทุน') !== -1) return CAT_TAM;
+  // เงินนอกงบประมาณ
+  if (val.indexOf('เงินนอก') !== -1) return CAT_NORK;
+  return CAT_OTHER;
+}
+
+// เบิกจ่ายแยกตามหมวดหลัก → { 'คชจ.ขับเคลื่อน': 500000, ... }
+function getSpentByCategory() {
+  var map = {};
+  CAT_ORDER.forEach(function(c) { map[c] = 0; });
+  getActivityLog()
+    .filter(function(r) { return r.status === STATUS_PAID; })
+    .forEach(function(r) {
+      map[r.category] = (map[r.category] || 0) + r.amount;
+    });
+  return map;
+}
+
+// เบิกจ่ายแยกตาม col L (sub-type) ภายในหมวดที่กำหนด
+// คืน array [{type, amount}] เรียงจากมากไปน้อย
+function getSpentByTypeInCategory(category) {
+  var map = {};
+  getActivityLog()
+    .filter(function(r) { return r.status === STATUS_PAID && r.category === category; })
+    .forEach(function(r) {
+      var t = r.budgetType || '(ไม่ระบุ)';
+      map[t] = (map[t] || 0) + r.amount;
+    });
+  return Object.keys(map)
+    .map(function(t) { return { type: t, amount: map[t] }; })
+    .sort(function(a, b) { return b.amount - a.amount; });
+}
+
+// เบิกจ่ายแยกตามรหัสงบประมาณ (col 9) → { 'P1200...': 80000, ... }
 function getSpentByBudgetCode() {
   var map = {};
   getActivityLog()
