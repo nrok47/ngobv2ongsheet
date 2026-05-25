@@ -2,30 +2,47 @@
 // DataReader.gs — อ่านข้อมูลจาก Activity Log (ไม่แตะ sheet อื่น)
 // ============================================================
 
-// หา sheet ที่มี Activity Log โดย scan หาหัวคอลัมน์ที่กำหนดใน Config
-function getActivitySheet_() {
+// หา sheet และ header row ของ Activity Log
+// รองรับกรณีที่ header ไม่ได้อยู่ row 1 (เช่น อยู่กลาง sheet)
+function findActivityLocation_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var newSheets = [ROUNDS_SHEET_NAME, TARGETS_SHEET_NAME, DASH_SHEET_NAME];
   var sheets = ss.getSheets();
+
   for (var i = 0; i < sheets.length; i++) {
-    var cell = sheets[i].getRange(1, COL_DATE_RESERVE).getValue();
-    if (String(cell).trim() === ACTIVITY_HEADER_MARKER) {
-      return sheets[i];
+    var sheet = sheets[i];
+    if (newSheets.indexOf(sheet.getName()) !== -1) continue; // ข้าม sheet ที่เราสร้างเอง
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow === 0) continue;
+
+    // Scan column A ทุก row หา header marker
+    var scanRows = Math.min(lastRow, 300);
+    var colA = sheet.getRange(1, COL_DATE_RESERVE, scanRows, 1).getValues();
+    for (var r = 0; r < colA.length; r++) {
+      if (String(colA[r][0]).trim() === ACTIVITY_HEADER_MARKER) {
+        return { sheet: sheet, headerRow: r + 1 };
+      }
     }
   }
   throw new Error(
-    'ไม่พบ sheet ที่มีหัวคอลัมน์ "' + ACTIVITY_HEADER_MARKER + '" ที่คอลัมน์ A\n' +
-    'กรุณาตรวจสอบชื่อหัวคอลัมน์หรือแก้ไข COL_DATE_RESERVE ใน Config.gs'
+    'ไม่พบหัวคอลัมน์ "' + ACTIVITY_HEADER_MARKER + '" ในทุก sheet (scan 300 rows แรก)\n' +
+    'กรุณาตรวจสอบว่า column แรกของ activity log ชื่อ "' + ACTIVITY_HEADER_MARKER + '" จริง\n' +
+    'หรือแก้ ACTIVITY_HEADER_MARKER ใน Config.gs ให้ตรงกับหัวคอลัมน์จริง'
   );
 }
 
 // ดึง Activity Log ทั้งหมด คืน array of object
 // ข้าม row ที่ไม่มีวันที่ (เช่น row สรุป โอนเงินรอบ)
 function getActivityLog() {
-  var sheet = getActivitySheet_();
-  var lastRow = sheet.getLastRow();
-  if (lastRow < ACTIVITY_START_ROW) return [];
+  var loc = findActivityLocation_();
+  var sheet = loc.sheet;
+  var dataStartRow = loc.headerRow + 1; // row ถัดจาก header
 
-  var data = sheet.getRange(ACTIVITY_START_ROW, 1, lastRow - ACTIVITY_START_ROW + 1, 15).getValues();
+  var lastRow = sheet.getLastRow();
+  if (lastRow < dataStartRow) return [];
+
+  var data = sheet.getRange(dataStartRow, 1, lastRow - dataStartRow + 1, 15).getValues();
   var rows = [];
 
   for (var i = 0; i < data.length; i++) {
